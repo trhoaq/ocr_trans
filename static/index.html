@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ocr_trans</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="header-content">
+            <h1><i class="fas fa-camera"></i> Dịch văn bản và hình ảnh </h1>
+            <p>Tải lên hình ảnh chứa văn bản để trích xuất và dịch sang tiếng Việt</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <div id="dropzone">
+        Paste image here (Ctrl+V) or 
+        <input type="file" id="fileInput" accept="image/*">
+        <div style="font-size:12px; color:#666">
+            Supports images with tables & math (OCR engine must return LaTeX/tables).
+        </div>
+    </div>
+
+    <div id="controls">
+        <button id="doOcrBtn">Run OCR</button>
+        <button id="toDocxBtn">Export .docx</button>
+        <button id="toPdfBtn">Export .pdf</button>
+    </div>
+
+    <div id="editor-container">
+        <div id="editor-wrapper">
+            <h3>Markdown Editor</h3>
+            <textarea id="editor"></textarea>
+        </div>
+        <div id="preview-wrapper">
+            <h3>Preview (math rendered)</h3>
+            <div id="rendered"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.js"></script>
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+
+<!-- MathJax config -->
+    <script>
+        window.MathJax = {
+            tex: {
+            inlineMath: [['$', '$'], ['\\(', '\\)']],
+            displayMath: [['$$', '$$'], ['\\[', '\\]']]
+        },
+        svg: { fontCache: 'global' }
+    };
+    </script>
+    <script id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+<!-- marked.js phải nằm trước app.js -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,154 +1,83 @@
-from flask import Blueprint, request, jsonify, send_file
-from werkzeug.utils import secure_filename
+from google import genai
+from google.genai import types
+import pypandoc
+from dotenv import load_dotenv
 import os
-import io
-import google.generativeai as genai
-from PIL import Image
-from docx import Document
-from fpdf import FPDF
-import tempfile
-from flask_cors import cross_origin
-from deep_translator import GoogleTranslator
-import requests
 
-ocr_bp = Blueprint('ocr', __name__)
+load_dotenv()
+api_key = os.getenv("GEMINI_API_KEY")
 
-# Cấu hình upload
-UPLOAD_FOLDER = 'uploads'
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
-FONT_URL = "https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf"
-FONT_PATH = os.path.join(os.path.dirname(__file__), "DejaVuSans.ttf")
+if not api_key:
+    raise ValueError("setup api key trong .env")
 
-def ensure_font():
-    """Tải font DejaVuSans.ttf nếu chưa có"""
-    if not os.path.exists(FONT_PATH):
-        print("⏬ Đang tải font DejaVuSans.ttf ...")
-        try:
-            response = requests.get(FONT_URL, timeout=30)
-            response.raise_for_status()
-            with open(FONT_PATH, "wb") as f:
-                f.write(response.content)
-            print("✅ Đã tải font thành công:", FONT_PATH)
-        except Exception as e:
-            print("❌ Không thể tải font:", e)
-    else:
-        print("✔ Font đã tồn tại:", FONT_PATH)
+client = genai.Client(api_key=api_key)
 
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+def ocr_bytes_to_markdown(image_bytes: bytes) -> str:
+    """
+    Gửi ảnh lên Gemini để OCR và trả về Markdown text.
+    - Text thường giữ nguyên
+    - Bảng -> Markdown table
+    - Công thức toán -> $...$ hoặc $$...$$
+    """
 
-def generate_docx(extracted_text, translated_text):
-    """Tạo file DOCX từ văn bản gốc và bản dịch"""
-    document = Document()
+    prompt = """
+    Bạn là OCR engine, phiên dịch viên chuyên nghiệp.
+    Hãy đọc toàn bộ nội dung trong ảnh và trả về kết quả ở dạng Markdown.
+    Đảm bảo các quy tắc sau:
+    1. Văn bản thường giữ nguyên.
+    2. Bảng phải được định dạng chính xác theo cú pháp Markdown table (| col1 | col2 |).
+    3. Công thức toán học (equations) phải được bao quanh bởi dấu đô la:
+       - Inline math: `$equation$` (ví dụ: `$E=mc^2$`)
+       - Display block math: `$$equation$$` trên một dòng riêng biệt (ví dụ: `$$\sum_{i=0}^n i^2 = \frac{n(n+1)(2n+1)}{6}$$`)
+    4. Mỗi công thức toán học (equation) cần phải tách riêng ra 1 dòng.
+    5. Sau khi chuyển về dạng markdown thì cần phải phiên dịch từ tiếng anh qua tiếng việt.
+    6. Đảm bảo thứ tự các câu và không cần dịch những bảng, hình ảnh, đồ thị.
+    7. KHÔNG thêm bất kỳ giải thích nào, chỉ xuất ra Markdown hợp lệ.
+    8. Khi ocr giữ nguyên các kí tự đặc biệt của file .md
+    9. NẾU có thì phần đáp án cách nhau bởi A B C D thì bạn hãy xuống dòng 2 lần (LƯU Ý: tuyệt đối không hiện thị kí tự <br><br>).
+    10. ĐẶC BIỆT Lưu ý, dưới mỗi câu không được có cái đường kẻ ngang dài, trừ khi trong ảnh có.
+    11. loại bỏ các kí tự " ``` " và " --- "
+    """
 
-    document.add_paragraph(translated_text)
+    response = client.models.generate_content(
+        model="gemini-1.5-flash", # Sử dụng model 
+        contents=[
+            types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), # Đảm bảo mime_type chính xác
+            prompt
+        ]
+    )
 
-    bio = io.BytesIO()
-    document.save(bio)
-    bio.seek(0)
-    return bio
+    return response.text.strip()
 
-def generate_pdf(extracted_text, translated_text):
-    """Tạo file PDF từ văn bản gốc và bản dịch"""
-    pdf = FPDF()
-    pdf.add_page()
-
-    pdf.add_font("DejaVu", "", FONT_PATH, uni=True)
-    pdf.set_font("DejaVu", "", 14)
-
-    pdf.multi_cell(0, 10, translated_text)
-
-    return pdf.output(dest="S").encode("latin1", "ignore")
-
-@ocr_bp.route('/process', methods=['POST'])
-@cross_origin()
-def process_image():
-    """Xử lý ảnh OCR và dịch thuật"""
+def markdown_to_docx(md_text: str, out_path: str):
     try:
-        # Kiểm tra API key
-        api_key = request.form.get('api_key')
-        if not api_key:
-            return jsonify({'error': 'API key is required'}), 400
-
-        # Kiểm tra file upload
-        if 'image' not in request.files:
-            return jsonify({'error': 'No image file provided'}), 400
-        
-        file = request.files['image']
-        if file.filename == '':
-            return jsonify({'error': 'No file selected'}), 400
-
-        if not allowed_file(file.filename):
-            return jsonify({'error': 'Invalid file type. Only PNG, JPG, JPEG allowed'}), 400
-
-        # Xử lý ảnh
-        image = Image.open(file.stream)
-        
-        # Cấu hình Gemini API
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        
-        # Prompt cho OCR
-        prompt = """You are an expert in text extraction. Accurately extract all the text and mathematical formulas from this image. Present the formulas in a clear and linearized format. Return only the extracted content, no additional commentary."""
-        
-        # Gửi ảnh đến Gemini API
-        response = model.generate_content([prompt, image])
-        
-        if not response.text:
-            return jsonify({'error': 'Could not extract text from image'}), 400
-        
-        extracted_text = response.text
-        
-        translated_text = GoogleTranslator(source='en', target='vi').translate(extracted_text)
-        
-        return jsonify({
-            'success': True,
-            'original_text': extracted_text,
-            'translated_text': translated_text,
-            'original_length': len(extracted_text),
-            'translated_length': len(translated_text)
-        })
-        
+        pypandoc.convert_text(
+            md_text,
+            to='docx',
+            format='markdown+tex_math_dollars+tex_math_single_backslash-yaml_metadata_block',
+            outputfile=out_path,
+            extra_args=[
+                '--standalone',
+                '--mathml'  # ép công thức thành OMML (Office MathML)
+            ]
+        )
     except Exception as e:
-        error_msg = str(e)
-        if "API_KEY" in error_msg.upper():
-            return jsonify({'error': 'Invalid API key'}), 401
-        elif "QUOTA" in error_msg.upper() or "LIMIT" in error_msg.upper():
-            return jsonify({'error': 'API quota exceeded'}), 429
-        else:
-            return jsonify({'error': f'Processing error: {error_msg}'}), 500
+        raise RuntimeError(f"Pandoc DOCX conversion failed: {e}")
 
-@ocr_bp.route('/download/<file_type>', methods=['POST'])
-@cross_origin()
-def download_file(file_type):
-    """Tải xuống file DOCX hoặc PDF"""
+
+
+def markdown_to_pdf(md_text: str, out_path: str):
     try:
-        data = request.get_json()
-        original_text = data.get('original_text', '')
-        translated_text = data.get('translated_text', '')
-        
-        if not original_text or not translated_text:
-            return jsonify({'error': 'Text data is required'}), 400
-        
-        if file_type == 'docx':
-            file_data = generate_docx(original_text, translated_text)
-            return send_file(
-                file_data,
-                as_attachment=True,
-                download_name='ket_qua_ocr_dich.docx',
-                mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-            )
-        elif file_type == 'pdf':
-            file_data = generate_pdf(original_text, translated_text)
-            return send_file(
-                io.BytesIO(file_data),
-                as_attachment=True,
-                download_name='ket_qua_ocr_dich.pdf',
-                mimetype='application/pdf'
-            )
-        else:
-            return jsonify({'error': 'Invalid file type'}), 400
-            
+        pypandoc.convert_text(
+            md_text,
+            'pdf',
+            format='markdown+tex_math_dollars+tex_math_single_backslash-yaml_metadata_block',
+            outputfile=out_path,
+            extra_args=[
+                '--standalone',
+                '--pdf-engine=xelatex'  
+            ]
+        )
     except Exception as e:
-        return jsonify({'error': f'File generation error: {str(e)}'}), 500
+        raise RuntimeError(f"Pandoc PDF conversion failed: {e}")
 
