@@ -1,15 +1,33 @@
-<!DOCTYPE html>
+⁷<!DOCTYPE html>
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ocr_trans</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
+    <style>
+        body { font-family: system-ui, Arial; margin: 16px; display: flex; flex-direction: column; height: 95vh; }
+        h2 { margin-top: 0; }
+        #dropzone { border: 2px dashed #aaa; padding: 20px; text-align:center; margin-bottom:8px; }
+        #controls { margin-bottom: 12px; display: flex; gap: 8px; }
+        #editor-container { display: flex; flex: 1; gap: 16px; margin-top: 16px; }
+        #editor-wrapper, #preview-wrapper { flex: 1; display: flex; flex-direction: column; }
+        #editor { min-height: 100%; } 
+        .CodeMirror { min-height: 100% !important; height: auto !important; } /* Ghi đè SimpleMDE */
+        .CodeMirror-scroll { min-height: 100% !important; }
+        #rendered { border: 1px solid #ddd; padding: 10px; flex: 1; background: #fafafa; overflow-y: auto; }
+    </style>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        #rendered {flex: 1;padding: 20px;border: 1px solid #ccc;background: #fff; color: #000; overflow-y: auto;}
+        #rendered.markdown-body {box-sizing: border-box;min-height: 100%;background: #fff;}
+
+mjx-container {
+font-size: 110% !important;   /* chữ to hơn */
+}
+</style> 
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
         <div class="header-content">
             <h1><i class="fas fa-camera"></i> Dịch văn bản và hình ảnh </h1>
