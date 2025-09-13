@@ -3,6 +3,12 @@ from google.genai import types
 import pypandoc
 from dotenv import load_dotenv
 import os
+import uuid
+import base64 
+
+OUTPUT_DIR = "output"
+IMG_DIR = os.path.join(OUTPUT_DIR, "images")
+os.makedirs(IMG_DIR, exist_ok=True)
 
 load_dotenv()
 api_key = os.getenv("GEMINI_API_KEY")
@@ -10,7 +16,8 @@ api_key = os.getenv("GEMINI_API_KEY")
 if not api_key:
     raise ValueError("setup api key trong .env")
 
-client = genai.Client(api_key=api_key)
+
+client = genai.Client(api_key=api_key) 
 
 def ocr_bytes_to_markdown(image_bytes: bytes) -> str:
     """
@@ -40,7 +47,7 @@ def ocr_bytes_to_markdown(image_bytes: bytes) -> str:
     """
 
     response = client.models.generate_content(
-        model="gemini-1.5-flash", # Sử dụng model 
+        model="gemini-1.5-flash", # Sử dụng model phù hợp, ví dụ gemini-1.5-flash cho tốc độ
         contents=[
             types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"), # Đảm bảo mime_type chính xác
             prompt
@@ -75,9 +82,31 @@ def markdown_to_pdf(md_text: str, out_path: str):
             outputfile=out_path,
             extra_args=[
                 '--standalone',
-                '--pdf-engine=xelatex'  
+                '--pdf-engine=xelatex'   # hoặc 'lualatex' nếu xelatex chưa có
             ]
         )
     except Exception as e:
         raise RuntimeError(f"Pandoc PDF conversion failed: {e}")
+    
+def process_markdown_with_images(md: str, images: list):
+    """
+    Giải mã base64 → file ảnh → thêm vào markdown cuối.
+    """
+    md_out = md
+    for i, img_b64 in enumerate(images):
+        try:
+            ext = "png"
+            if img_b64.startswith("data:image/jpeg"):
+                ext = "jpg"
+            fname = f"{uuid.uuid4().hex}.{ext}"
+            img_path = os.path.join(IMG_DIR, fname)
 
+            img_data = base64.b64decode(img_b64.split(",")[1])
+            with open(img_path, "wb") as f:
+                f.write(img_data)
+
+            # thêm markdown image
+            md_out += f"\n\n![image{i}](images/{fname})\n"
+        except Exception as e:
+            print("Image decode error:", e)
+    return md_out

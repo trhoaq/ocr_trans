@@ -1,300 +1,179 @@
-// Global variables
-let selectedFile = null;
-let processedData = null;
+// app.js
+let clipboardImageData = null;
 
-// DOM elements
-const apiKeyInput = document.getElementById('apiKey');
-const uploadArea = document.getElementById('uploadArea');
-const imageInput = document.getElementById('imageInput');
-const imagePreview = document.getElementById('imagePreview');
-const previewImg = document.getElementById('previewImg');
-const fileName = document.getElementById('fileName');
-const removeImageBtn = document.getElementById('removeImage');
-const processBtn = document.getElementById('processBtn');
-const loading = document.getElementById('loading');
-const loadingText = document.getElementById('loadingText');
-const resultsSection = document.getElementById('resultsSection');
-const originalText = document.getElementById('originalText');
-const translatedText = document.getElementById('translatedText');
-const originalLength = document.getElementById('originalLength');
-const translatedLength = document.getElementById('translatedLength');
-const downloadDocx = document.getElementById('downloadDocx');
-const downloadPdf = document.getElementById('downloadPdf');
-const errorMessage = document.getElementById('errorMessage');
-const errorText = document.getElementById('errorText');
-const API_BASE_URL = "http://localhost:5000"; 
+// Elements
+const fileInput = document.getElementById("fileInput");
+const dropzone = document.getElementById("dropzone");
+const doOcrBtn = document.getElementById("doOcrBtn");
+const toDocxBtn = document.getElementById("toDocxBtn");
+const toPdfBtn = document.getElementById("toPdfBtn");
+const rendered = document.getElementById("rendered");
+const editorWrapper = document.getElementById("editor-wrapper"); // Lấy wrapper của editor
 
-// Event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    // Upload area events
-    uploadArea.addEventListener('click', () => imageInput.click());
-    uploadArea.addEventListener('dragover', handleDragOver);
-    uploadArea.addEventListener('dragleave', handleDragLeave);
-    uploadArea.addEventListener('drop', handleDrop);
-    
-    // File input change
-    imageInput.addEventListener('change', handleFileSelect);
-    
-    // Remove image
-    removeImageBtn.addEventListener('click', removeImage);
-    
-    // Process button
-    processBtn.addEventListener('click', processImage);
-    
-    // Download buttons
-    downloadDocx.addEventListener('click', () => downloadFile('docx'));
-    downloadPdf.addEventListener('click', () => downloadFile('pdf'));
-    
-    // API key input
-    apiKeyInput.addEventListener('input', checkFormValidity);
-    
-    // Initial form check
-    checkFormValidity();
+// Markdown editor
+const simplemde = new SimpleMDE({
+  element: document.getElementById("editor"),
+  spellChecker: false,
+  renderingConfig: {
+    singleLineBreaks: false,
+    codeSyntaxHighlighting: true,
+  }
+});
+simplemde.codemirror.on("change", () => {
+  updatePreview();
 });
 
-// Drag and drop handlers
-function handleDragOver(e) {
-    e.preventDefault();
-    uploadArea.classList.add('dragover');
+// ---------- Preview ----------
+function updatePreview() {
+  const md = simplemde.value();
+
+  // Render markdown với marked.js
+  const html = marked.parse(md, { breaks: true });
+
+  rendered.className = "markdown-body";
+  rendered.innerHTML = html;
+
+  // Re-render MathJax
+  if (window.MathJax && window.MathJax.typesetPromise) {
+    MathJax.typesetClear([rendered]);
+    MathJax.typesetPromise([rendered]).catch(err => console.error(err));
+  }
 }
 
-function handleDragLeave(e) {
-    e.preventDefault();
-    uploadArea.classList.remove('dragover');
+
+// ---------- Image Handling ----------
+function handleImageUpload(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    clipboardImageData = reader.result;
+    // Hiển thị ảnh trong dropzone
+    dropzone.innerHTML = `<img src="${clipboardImageData}" style="max-width:100%; height:auto; display:block; margin: 0 auto;" /><div style="font-size:12px; color:#666; margin-top:8px;">Image ready for OCR. Click "Run OCR".</div>`;
+  };
+  reader.readAsDataURL(file);
 }
 
-function handleDrop(e) {
-    e.preventDefault();
-    uploadArea.classList.remove('dragover');
-    
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-        handleFile(files[0]);
+function handlePasteImage(event) {
+  const items = (event.clipboardData || event.originalEvent.clipboardData).items;
+  for (const item of items) {
+    if (item.type.indexOf("image") !== -1) {
+      const file = item.getAsFile();
+      handleImageUpload(file);
+      event.preventDefault(); // Ngăn chặn hành vi paste mặc định
+      return; // Chỉ xử lý ảnh đầu tiên được paste
     }
+  }
 }
 
-// File selection handler
-function handleFileSelect(e) {
-    const file = e.target.files[0];
-    if (file) {
-        handleFile(file);
-    }
+fileInput.addEventListener("change", ev => handleImageUpload(ev.target.files[0]));
+document.addEventListener("paste", handlePasteImage);
+
+let images = []; // lưu nhiều ảnh đã paste/upload
+
+function handleImageUpload(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const imgData = reader.result;
+    clipboardImageData = imgData;
+    images.push(imgData); // thêm vào list
+
+    // Hiển thị nhiều ảnh trong dropzone
+    dropzone.innerHTML = images.map(
+      (src, i) => `<img src="${src}" style="max-width:100%; margin:8px 0; display:block"/>`
+    ).join('') + `<div style="font-size:12px; color:#666; margin-top:8px;">${images.length} image(s) ready for OCR/Export</div>`;
+  };
+  reader.readAsDataURL(file);
 }
 
-// File handling
-function handleFile(file) {
-    // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-    if (!allowedTypes.includes(file.type)) {
-        showError('Chỉ hỗ trợ file JPG, JPEG, PNG');
-        return;
-    }
-    
-    // Validate file size (max 10MB)
-    if (file.size > 10 * 1024 * 1024) {
-        showError('File quá lớn. Vui lòng chọn file nhỏ hơn 10MB');
-        return;
-    }
-    
-    selectedFile = file;
-    
-    // Show preview
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        previewImg.src = e.target.result;
-        fileName.textContent = file.name;
-        imagePreview.style.display = 'block';
-        uploadArea.style.display = 'none';
-    };
-    reader.readAsDataURL(file);
-    
-    checkFormValidity();
-    hideError();
+
+// ---------- API Calls ----------
+async function callOcr() {
+  if (!clipboardImageData) {
+    alert("Paste or upload an image first.");
+    return;
+  }
+
+  doOcrBtn.disabled = true;
+  doOcrBtn.textContent = "Running OCR...";
+
+  try {
+    const res = await fetch("/ocr", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dataURL: clipboardImageData })
+    });
+
+    const j = await res.json();
+    if (j.error) throw new Error(j.error);
+
+    // Append thay vì overwrite
+    const currentContent = simplemde.value();
+    const newContent = currentContent.trim() ? currentContent + "\n\n" + j.markdown : j.markdown;
+    simplemde.value(newContent);
+
+    updatePreview();
+  } catch (err) {
+    alert("OCR failed: " + err.message);
+  } finally {
+    doOcrBtn.disabled = false;
+    doOcrBtn.textContent = "Run OCR";
+  }
 }
 
-// Remove image
-function removeImage() {
-    selectedFile = null;
-    imagePreview.style.display = 'none';
-    uploadArea.style.display = 'block';
-    imageInput.value = '';
-    checkFormValidity();
-    hideResults();
-}
+async function exportFile(endpoint) {
+  const md = simplemde.value();
+  if (!md.trim()) {
+    alert("Markdown editor is empty. Please generate or type some content first.");
+    return;
+  }
 
-// Check form validity
-function checkFormValidity() {
-    const hasApiKey = apiKeyInput.value.trim() !== '';
-    const hasFile = selectedFile !== null;
-    
-    processBtn.disabled = !(hasApiKey && hasFile);
-}
+  const exportBtn = endpoint === "/to_docx" ? toDocxBtn : toPdfBtn;
+  exportBtn.disabled = true;
+  exportBtn.textContent = `Exporting ${endpoint.split('_')[1].toUpperCase()}...`;
 
-// Process image
-async function processImage() {
-    if (!selectedFile || !apiKeyInput.value.trim()) {
-        showError('Vui lòng nhập API Key và chọn file ảnh');
-        return;
-    }
-    
-    // Show loading
-    showLoading('Đang xử lý ảnh và trích xuất văn bản...');
-    hideError();
-    hideResults();
-    
-    try {
-        // Prepare form data
-        const formData = new FormData();
-        formData.append('image', selectedFile);
-        formData.append('api_key', apiKeyInput.value.trim());
-        
-        // Send request
-        const response = await fetch(`${API_BASE_URL}/api/ocr/process`, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Có lỗi xảy ra khi xử lý');
-        }
-        
-        // Store processed data
-        processedData = data;
-        
-        // Show results
-        showResults(data);
-        
-    } catch (error) {
-        console.error('Processing error:', error);
-        showError(getErrorMessage(error.message));
-    } finally {
-        hideLoading();
-    }
-}
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ markdown: md, images: images }) // gửi kèm images[]
+    });
 
-// Show results
-function showResults(data) {
-    originalText.value = data.original_text;
-    translatedText.value = data.translated_text;
-    originalLength.textContent = data.original_length;
-    translatedLength.textContent = data.translated_length;
-    
-    resultsSection.style.display = 'block';
-    
-    // Scroll to results
-    resultsSection.scrollIntoView({ behavior: 'smooth' });
-}
-
-// Hide results
-function hideResults() {
-    resultsSection.style.display = 'none';
-    processedData = null;
-}
-
-// Download file
-async function downloadFile(fileType) {
-    if (!processedData) {
-        showError('Không có dữ liệu để tải xuống');
-        return;
-    }
-    
-    try {
-        showLoading(`Đang tạo file ${fileType.toUpperCase()}...`);
-        
-        const response = await fetch(`${API_BASE_URL}/api/ocr/download/${fileType}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                original_text: processedData.original_text,
-                translated_text: processedData.translated_text
-            })
-        });
-        
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || 'Có lỗi khi tạo file');
-        }
-        
-        // Download file
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `ket_qua_ocr_dich.${fileType}`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
-        
-    } catch (error) {
-        console.error('Download error:', error);
-        showError(`Lỗi khi tải file: ${error.message}`);
-    } finally {
-        hideLoading();
-    }
-}
-
-// Copy text to clipboard
-function copyText(elementId) {
-    const element = document.getElementById(elementId);
-    element.select();
-    document.execCommand('copy');
-    
-    // Show feedback
-    const button = element.parentNode.querySelector('.btn-copy');
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-check"></i> Đã copy!';
-    button.style.background = '#28a745';
-    
-    setTimeout(() => {
-        button.innerHTML = originalText;
-        button.style.background = '#667eea';
-    }, 2000);
-}
-
-// Show loading
-function showLoading(text) {
-    loadingText.textContent = text;
-    loading.style.display = 'block';
-    processBtn.disabled = true;
-}
-
-// Hide loading
-function hideLoading() {
-    loading.style.display = 'none';
-    checkFormValidity();
-}
-
-// Show error
-function showError(message) {
-    errorText.textContent = message;
-    errorMessage.style.display = 'block';
-    
-    // Auto hide after 5 seconds
-    setTimeout(hideError, 5000);
-}
-
-// Hide error
-function hideError() {
-    errorMessage.style.display = 'none';
-}
-
-// Get user-friendly error message
-function getErrorMessage(error) {
-    if (error.includes('API key')) {
-        return 'API Key không hợp lệ. Vui lòng kiểm tra lại API Key.';
-    } else if (error.includes('quota') || error.includes('limit')) {
-        return 'Đã vượt quá giới hạn API. Vui lòng thử lại sau.';
-    } else if (error.includes('network') || error.includes('fetch')) {
-        return 'Lỗi kết nối mạng. Vui lòng kiểm tra kết nối internet.';
-    } else if (error.includes('Invalid file type')) {
-        return 'Định dạng file không hỗ trợ. Chỉ chấp nhận JPG, JPEG, PNG.';
+    const j = await res.json();
+    if (j.download_url) {
+      window.location = j.download_url;
+      simplemde.value(""); // reset sau export
+      updatePreview();
+      images = []; // reset list ảnh
+    } else if (j.error) {
+      throw new Error(j.error);
     } else {
-        return error || 'Có lỗi xảy ra. Vui lòng thử lại.';
+      throw new Error("No download URL or unknown error from server.");
     }
+  } catch (err) {
+    alert(`Export ${endpoint.split('_')[1].toUpperCase()} failed: ${err.message}`);
+  } finally {
+    exportBtn.disabled = false;
+    exportBtn.textContent = endpoint === "/to_docx" ? "Export .docx" : "Export .pdf";
+  }
 }
 
+// ---------- Event Listeners ----------
+doOcrBtn.addEventListener("click", callOcr);
+toDocxBtn.addEventListener("click", () => exportFile("/to_docx"));
+toPdfBtn.addEventListener("click", () => exportFile("/to_pdf"));
+
+// Adjust SimpleMDE height dynamically for Flexbox
+// This is a common hack for SimpleMDE in flex containers
+// The ideal way is to set .CodeMirror and .CodeMirror-scroll to 100% height in CSS.
+// But SimpleMDE often sets explicit height, so we might need to override.
+// The CSS added to index.html attempts to fix this.
+window.addEventListener('load', () => {
+    // Try to ensure CodeMirror (SimpleMDE's underlying editor) fills its parent
+    const cmElement = document.querySelector('.CodeMirror');
+    if (cmElement) {
+        cmElement.style.height = '100%';
+        const cmScroll = document.querySelector('.CodeMirror-scroll');
+        if (cmScroll) cmScroll.style.minHeight = '100%';
+    }
+});
