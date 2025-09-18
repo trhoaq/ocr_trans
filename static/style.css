@@ -1,0 +1,84 @@
+body {
+  font-family: system-ui, Arial;
+  margin: 16px;
+  display: flex;
+  flex-direction: column;
+  height: 95vh;
+}
+
+h2 {
+  margin-top: 0;
+}
+
+#dropzone {
+  border: 2px dashed #aaa;
+  padding: 20px;
+  text-align: center;
+  margin-bottom: 8px;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+#controls {
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+}
+
+#editor-container {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+#editor-wrapper,
+#preview-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+#editor {
+  min-height: 100%;
+}
+
+.CodeMirror {
+  min-height: 100% !important;
+  height: auto !important;
+}
+
+.CodeMirror-scroll {
+  min-height: 100% !important;
+}
+
+#rendered {
+  border: 1px solid #ddd;
+  padding: 10px;
+  flex: 1;
+  background: #fafafa;
+  overflow-y: auto;
+}
+
+/* GitHub markdown override */
+#rendered {
+  flex: 1;
+  padding: 20px;
+  border: 1px solid #ccc;
+  background: #fff;
+  color: #000;
+  overflow-y: auto;
+}
+
+#rendered.markdown-body {
+  box-sizing: border-box;
+  min-height: 100%;
+  background: #fff;
+}
+
+mjx-container {
+  font-size: 110% !important;
+}

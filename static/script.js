@@ -1,4 +1,3 @@
-// app.js
 let clipboardImageData = null;
 
 // Elements
@@ -8,7 +7,8 @@ const doOcrBtn = document.getElementById("doOcrBtn");
 const toDocxBtn = document.getElementById("toDocxBtn");
 const toPdfBtn = document.getElementById("toPdfBtn");
 const rendered = document.getElementById("rendered");
-const editorWrapper = document.getElementById("editor-wrapper"); // Lấy wrapper của editor
+const editorWrapper = document.getElementById("editor-wrapper");
+const resetBtn = document.getElementById("resetBtn");
 
 // Markdown editor
 const simplemde = new SimpleMDE({
@@ -42,13 +42,19 @@ function updatePreview() {
 
 
 // ---------- Image Handling ----------
+let images = []; // lưu nhiều ảnh đã paste/upload
+
 function handleImageUpload(file) {
   if (!file) return;
   const reader = new FileReader();
   reader.onload = () => {
-    clipboardImageData = reader.result;
-    // Hiển thị ảnh trong dropzone
-    dropzone.innerHTML = `<img src="${clipboardImageData}" style="max-width:100%; height:auto; display:block; margin: 0 auto;" /><div style="font-size:12px; color:#666; margin-top:8px;">Image ready for OCR. Click "Run OCR".</div>`;
+    const imgData = reader.result;
+    clipboardImageData = imgData;
+    images = [ImageData]; 
+
+    dropzone.innerHTML = 
+     `<img src="${imgData}" style="max-width:100%; display:block; margin:auto"/>
+      <div style="font-size:12px; color:#666; margin-top:8px;">Image ready for OCR</div>`;
   };
   reader.readAsDataURL(file);
 }
@@ -59,33 +65,14 @@ function handlePasteImage(event) {
     if (item.type.indexOf("image") !== -1) {
       const file = item.getAsFile();
       handleImageUpload(file);
-      event.preventDefault(); // Ngăn chặn hành vi paste mặc định
-      return; // Chỉ xử lý ảnh đầu tiên được paste
+      event.preventDefault();
+      return;
     }
   }
 }
 
 fileInput.addEventListener("change", ev => handleImageUpload(ev.target.files[0]));
 document.addEventListener("paste", handlePasteImage);
-
-let images = []; // lưu nhiều ảnh đã paste/upload
-
-function handleImageUpload(file) {
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const imgData = reader.result;
-    clipboardImageData = imgData;
-    images.push(imgData); // thêm vào list
-
-    // Hiển thị nhiều ảnh trong dropzone
-    dropzone.innerHTML = images.map(
-      (src, i) => `<img src="${src}" style="max-width:100%; margin:8px 0; display:block"/>`
-    ).join('') + `<div style="font-size:12px; color:#666; margin-top:8px;">${images.length} image(s) ready for OCR/Export</div>`;
-  };
-  reader.readAsDataURL(file);
-}
-
 
 // ---------- API Calls ----------
 async function callOcr() {
@@ -107,7 +94,6 @@ async function callOcr() {
     const j = await res.json();
     if (j.error) throw new Error(j.error);
 
-    // Append thay vì overwrite
     const currentContent = simplemde.value();
     const newContent = currentContent.trim() ? currentContent + "\n\n" + j.markdown : j.markdown;
     simplemde.value(newContent);
@@ -136,15 +122,15 @@ async function exportFile(endpoint) {
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ markdown: md, images: images }) // gửi kèm images[]
+      body: JSON.stringify({ markdown: md, images: images })
     });
 
     const j = await res.json();
     if (j.download_url) {
       window.location = j.download_url;
-      simplemde.value(""); // reset sau export
+      simplemde.value("");
       updatePreview();
-      images = []; // reset list ảnh
+      images = [];
     } else if (j.error) {
       throw new Error(j.error);
     } else {
@@ -158,16 +144,23 @@ async function exportFile(endpoint) {
   }
 }
 
+resetBtn.addEventListener("click", () => {
+  simplemde.value("");
+  rendered.innerHTML = "";
+
+  dropzone.innerHTML = `Paste image here (Ctrl+V) or 
+    <input type="file" id="fileInput" accept="image/*">
+    <div style="font-size:12px; color:#666">
+        Supports images with tables & math (OCR engine must return LaTeX/tables).
+    </div>`;
+
+  images = [];
+  clipboardImageData = null;
+});
 // ---------- Event Listeners ----------
 doOcrBtn.addEventListener("click", callOcr);
 toDocxBtn.addEventListener("click", () => exportFile("/to_docx"));
 toPdfBtn.addEventListener("click", () => exportFile("/to_pdf"));
-
-// Adjust SimpleMDE height dynamically for Flexbox
-// This is a common hack for SimpleMDE in flex containers
-// The ideal way is to set .CodeMirror and .CodeMirror-scroll to 100% height in CSS.
-// But SimpleMDE often sets explicit height, so we might need to override.
-// The CSS added to index.html attempts to fix this.
 window.addEventListener('load', () => {
     // Try to ensure CodeMirror (SimpleMDE's underlying editor) fills its parent
     const cmElement = document.querySelector('.CodeMirror');

@@ -1,51 +1,18 @@
 <!doctype html>    
-    <html>
+<html>
     <head>
         <meta charset="utf-8"/>
         <title>OCR → Markdown → DOCX/PDF</title>
-        <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
-        <style>
-            body { font-family: system-ui, Arial; margin: 16px; display: flex; flex-direction: column; height: 95vh; }
-            h2 { margin-top: 0; }
-            #dropzone { border: 2px dashed #aaa; padding: 20px; text-align:center; margin-bottom:8px; }
-            #controls { margin-bottom: 12px; display: flex; gap: 8px; }
-            #editor-container { display: flex; flex: 1; gap: 16px; margin-top: 16px; }
-            #editor-wrapper, #preview-wrapper { flex: 1; display: flex; flex-direction: column; }
-            #editor { min-height: 100%; } /* Đảm bảo editor chiếm hết chiều cao */
-            .CodeMirror { min-height: 100% !important; height: auto !important; } /* Ghi đè SimpleMDE */
-            .CodeMirror-scroll { min-height: 100% !important; }
-            #rendered { border: 1px solid #ddd; padding: 10px; flex: 1; background: #fafafa; overflow-y: auto; }
-        </style>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
-        <style>
-            #rendered {
-  flex: 1;
-  padding: 20px;
-  border: 1px solid #ccc;
-  background: #fff;       /* nền trắng rõ ràng */
-  color: #000;            /* chữ đen rõ */
-  overflow-y: auto;
-}
-
-#rendered.markdown-body {
-  box-sizing: border-box;
-  min-height: 100%;
-  background: #fff;       /* đảm bảo không bị override bởi github-markdown-css */
-}
-mjx-container {
-  font-size: 110% !important;   /* chữ to hơn */
-}
-        </style>
+            <link rel="stylesheet" href="https://cdn.jsdelivr.net/simplemde/latest/simplemde.min.css">
+            <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.2.0/github-markdown.min.css">
+            <link rel="stylesheet" href="/static/style.css">
     </head>
     <body>
-        <h2>Paste/Upload image → OCR → Markdown editor → Export</h2>
+        <h2>Let's OCR baby!!</h2>
 
         <div id="dropzone">
         Paste image here (Ctrl+V) or 
             <input type="file" id="fileInput" accept="image/*">
-            <div style="font-size:12px; color:#666">
-                Supports images with tables & math (OCR engine must return LaTeX/tables).
-            </div>
         </div>
 
         <div id="controls">
@@ -61,7 +28,7 @@ mjx-container {
             <textarea id="editor"></textarea>
         </div>
         <div id="preview-wrapper">
-            <h3>Preview (math rendered)</h3>
+            <h3>Preview</h3>
             <div id="rendered"></div>
         </div>
     </div>
@@ -79,11 +46,8 @@ mjx-container {
         svg: { fontCache: 'global' }
     };
     </script>
-    <script id="MathJax-script" async
-        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
-
-<!-- marked.js phải nằm trước app.js -->
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="/static/scripts.js"></script>
+    <script src="/static/script.js"></script>
     </body>
     </html>
