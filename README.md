@@ -83,7 +83,7 @@ OCR_TRANS/
 
 ---
 
-## Autor
+## Author
 TrHoaq from woRd.inc
 
 ---
